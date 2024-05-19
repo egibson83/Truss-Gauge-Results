@@ -16,6 +16,9 @@
             height: 100vh;
             overflow: hidden;
         }
+        .hidden {
+            display: none;
+        }
         #container {
             display: flex;
             flex-direction: column;
@@ -93,13 +96,15 @@
             if (enteredPassword !== PASSWORD) {
                 alert("Incorrect password!");
                 document.body.innerHTML = "<h1>Access Denied</h1>";
+            } else {
+                document.getElementById('container').classList.remove('hidden');
             }
         }
         window.onload = checkPassword;
     </script>
 </head>
 <body>
-    <div id="container">
+    <div id="container" class="hidden">
         <div id="videoContainer">
             <div id="videoWrapper" style="height: 50vh;">
                 <video id="trussVideo" controls>
@@ -245,5 +250,6 @@
     </script>
 </body>
 </html>
+
 
 
