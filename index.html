@@ -1,0 +1,244 @@
+# -*- coding: utf-8 -*-
+"""
+Created on Sun May 19 14:50:46 2024
+
+@author: egibson
+"""
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Video and Graph Sync</title>
+    <script src="https://cdn.plot.ly/plotly-latest.min.js"></script>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 0;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            background-color: #f7f9fc;
+            height: 100vh;
+            overflow: hidden;
+        }
+        #container {
+            display: flex;
+            flex-direction: column;
+            width: 100%;
+            height: 100%;
+            background-color: #ffffff;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+            border-radius: 8px;
+            overflow: hidden;
+        }
+        #videoContainer {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            width: 100%;
+            padding: 10px;
+            background-color: #f1f3f5;
+            border-bottom: 1px solid #e2e5e8;
+        }
+        #videoWrapper {
+            flex-grow: 1;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            margin-right: 10px;
+        }
+        video {
+            width: 100%;
+            height: 100%;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+            box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
+        }
+        #videoList {
+            width: 220px;
+            max-height: calc(100vh - 20px);
+            overflow-y: auto;
+            background-color: #fff;
+            border: 1px solid #ccc;
+            padding: 10px;
+            border-radius: 4px;
+            box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
+        }
+        #graphDiv {
+            width: 100%;
+            height: 50%;
+            padding: 10px;
+        }
+        h2 {
+            color: #333;
+            font-size: 1.2em;
+            margin-top: 0;
+            margin-bottom: 10px;
+        }
+        button {
+            background-color: #007bff;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            cursor: pointer;
+            margin: 5px 0;
+            text-align: left;
+            width: 100%;
+            border-radius: 4px;
+            box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
+        }
+        button:hover {
+            background-color: #0056b3;
+        }
+    </style>
+</head>
+<body>
+    <div id="container">
+        <div id="videoContainer">
+            <div id="videoWrapper" style="height: 50vh;">
+                <video id="trussVideo" controls>
+                    <source id="videoSource" type="video/mp4">
+                    Your browser does not support the video tag.
+                </video>
+            </div>
+            <div id="videoList">
+                <h2>Video Segments</h2>
+            </div>
+        </div>
+        <div id="graphDiv"></div>
+    </div>
+
+    <script>
+        const videoSegments = [
+            { start: new Date('2024-05-15T09:45:32'), end: new Date('2024-05-15T09:46:04'), src: 'IMG_9093.mp4' },
+            { start: new Date('2024-05-15T16:41:30'), end: new Date('2024-05-15T16:44:30'), src: 'IMG_9106.mp4' },
+            { start: new Date('2024-05-15T16:44:31'), end: new Date('2024-05-15T16:45:43'), src: 'IMG_9107.mp4' }
+        ];
+
+        const video = document.getElementById('trussVideo');
+        const videoSource = document.getElementById('videoSource');
+        const videoList = document.getElementById('videoList');
+        const graphDiv = document.getElementById('graphDiv');
+
+        let currentSegmentIndex = -1;
+
+        function loadSegment(index) {
+            if (index < videoSegments.length) {
+                currentSegmentIndex = index;
+                videoSource.src = videoSegments[index].src;
+                video.load();
+                video.currentTime = 0;
+            } else {
+                console.log("No more segments to load.");
+            }
+        }
+
+        videoSegments.forEach((segment, index) => {
+            const button = document.createElement('button');
+            button.textContent = `Segment ${index + 1} (${segment.start.toLocaleTimeString()} - ${segment.end.toLocaleTimeString()})`;
+            button.addEventListener('click', () => {
+                loadSegment(index);
+            });
+            videoList.appendChild(button);
+        });
+
+        fetch('merged_sensor_data.json')
+            .then(response => response.json())
+            .then(data => {
+                const times = data.map(d => new Date(d.time_of_day));
+                const readingsGauge1 = data.map(d => d.gauge1_reading);
+                const readingsGauge2 = data.map(d => d.gauge2_reading);
+
+                const trace1 = {
+                    x: times,
+                    y: readingsGauge1,
+                    mode: 'lines',
+                    name: 'Gauge: Bottom Chord At Access Hole'
+                };
+
+                const trace2 = {
+                    x: times,
+                    y: readingsGauge2,
+                    mode: 'lines',
+                    name: 'Gauge: Bottom Chord Away from Hole'
+                };
+
+                const layout = {
+                    title: {
+                        text: 'Stress Readings Over Time',
+                        x: 0.05,
+                        xanchor: 'left'
+                    },
+                    xaxis: { title: 'Time of Day', type: 'date' },
+                    yaxis: { title: 'Stress (psi)' },
+                    hovermode: 'x unified',
+                    shapes: []
+                };
+
+                Plotly.newPlot(graphDiv, [trace1, trace2], layout);
+
+                video.addEventListener('timeupdate', () => {
+                    if (currentSegmentIndex >= 0) {
+                        const currentTime = video.currentTime;
+                        const segmentStart = videoSegments[currentSegmentIndex].start.getTime();
+                        const segmentEnd = videoSegments[currentSegmentIndex].end.getTime();
+                        const segmentDuration = (segmentEnd - segmentStart) / 1000;
+
+                        const graphTime = new Date(segmentStart + (currentTime / video.duration) * (segmentEnd - segmentStart));
+
+                        const index = times.findIndex(time => time >= graphTime);
+                        const xValue = times[index];
+                        const yValue1 = readingsGauge1[index];
+                        const yValue2 = readingsGauge2[index];
+
+                        const currentShape = {
+                            type: 'line',
+                            x0: graphTime,
+                            y0: 0,
+                            x1: graphTime,
+                            y1: 1,
+                            xref: 'x',
+                            yref: 'paper',
+                            line: {
+                                color: 'red',
+                                width: 2
+                            }
+                        };
+
+                        Plotly.relayout(graphDiv, {
+                            'xaxis.range': [new Date(graphTime.getTime() - 300000), new Date(graphTime.getTime() + 300000)],
+                            shapes: [currentShape]
+                        });
+
+                        Plotly.update(graphDiv, [{
+                            x: [[xValue]],
+                            y: [[yValue1]]
+                        }, {
+                            x: [[xValue]],
+                            y: [[yValue2]]
+                        }], {}, [2, 3]);
+                    }
+                });
+
+                function resizeContent() {
+                    const containerHeight = document.body.clientHeight;
+                    const containerWidth = document.body.clientWidth;
+                    const halfHeight = containerHeight / 2;
+
+                    document.getElementById('videoWrapper').style.height = `${halfHeight}px`;
+                    document.getElementById('videoWrapper').style.width = `${containerWidth}px`;
+
+                    graphDiv.style.height = `${halfHeight}px`;
+                    graphDiv.style.width = `${containerWidth}px`;
+                    Plotly.Plots.resize(graphDiv);
+                }
+
+                window.addEventListener('resize', resizeContent);
+                resizeContent();
+            });
+    </script>
+</body>
+</html>
+
